@@ -30,7 +30,8 @@
 AVAILABLE_TARGETS = sama5d2-xplained sama5d27-som1-ek \
                     sama5d3-ek \
                     sama5d4-ek sama5d4-xplained \
-                    sam9g15-ek sam9g25-ek sam9g35-ek sam9x25-ek sam9x35-ek
+                    sam9g15-ek sam9g25-ek sam9g35-ek sam9x25-ek sam9x35-ek \
+		    same70-xplained
 
 TOP := ../..
 
@@ -41,5 +42,7 @@ obj-y += examples/spi_slave/main.o
 CONFIG_SPI=y
 CONFIG_HAVE_SSC=
 CONFIG_HAVE_ISI=
+CONFIG_HAVE_SPI_BUS=y
+CONFIG_HAVE_SPI=y
 
 include $(TOP)/scripts/Makefile.rules
