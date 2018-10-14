@@ -145,7 +145,7 @@ static uint32_t _interfaces_parse(USBGenericDescriptor *desc, CDCDParseData *p_a
  * \param p_cdcd Pointer to CDCDSerialPort instance.
  */
 static void _set_line_coding_callback(void *arg, uint8_t status,
-		uint32_t transferred, uint32_t remaining)
+		uint32_t transferred, uint32_t buffered, uint32_t remaining)
 {
 	CDCDSerialPort *p_cdcd = (CDCDSerialPort*)arg;
 	bool ok = true;
