@@ -84,7 +84,7 @@ static USBDDriver driver;
  * Send a NULL packet
  */
 static void terminate_ctrl_in_with_null(void *arg, uint8_t status,
-		uint32_t transferred, uint32_t remaining)
+		uint32_t transferred, uint32_t buffered, uint32_t remaining)
 {
 	usbd_write(0, NULL, 0, NULL, NULL);
 }
@@ -449,11 +449,12 @@ static void usbd_driver_test(uint8_t test)
 	/* The device must be disconnected from the host */
 }
 
-static void usbd_set_address_callback(void *arg, uint8_t status, uint32_t transferred, uint32_t remaining)
+static void usbd_set_address_callback(void *arg, uint8_t status, uint32_t transferred, uint32_t buffered, uint32_t remaining)
 {
 	/* unused */
 	(void)status;
 	(void)transferred;
+	(void)buffered;
 	(void)remaining;
 
 	/* TODO void* -> uint8_t cast is ugly */

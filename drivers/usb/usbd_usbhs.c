@@ -514,7 +514,8 @@ static void _usbd_hal_end_of_transfer(uint8_t ep, uint8_t status)
 			struct _single_xfer *xfer =
 				(struct _single_xfer*)&endpoint->transfer.single;
 			uint32_t transferred = xfer->transferred;
-			uint32_t remaining = xfer->remaining + xfer->buffered;
+			uint32_t buffered = xfer->buffered;
+			uint32_t remaining = xfer->remaining;
 
 			USB_HAL_TRACE("EoT[%s%d:T%d:R%d] ",
 					endpoint->state == USB_HAL_ENDPOINT_RECEIVING ? "R" : "S",
@@ -534,7 +535,7 @@ static void _usbd_hal_end_of_transfer(uint8_t ep, uint8_t status)
 			if (endpoint->transfer.callback) {
 				endpoint->transfer.callback(
 						endpoint->transfer.callback_arg,
-						status, transferred, remaining);
+						status, transferred, buffered, remaining);
 			}
 		}
 		break;
@@ -557,7 +558,7 @@ static void _usbd_hal_end_of_transfer(uint8_t ep, uint8_t status)
 			if (endpoint->transfer.callback) {
 				endpoint->transfer.callback(
 						endpoint->transfer.callback_arg,
-						status, 0, 0);
+						status, 0, 0, 0);
 			}
 		}
 		break;

@@ -129,7 +129,7 @@
  * that a transaction is complete. For MBL transfers, transferred and remaining
  * arguments are not set.
  */
-typedef void (*usbd_xfer_cb_t)(void *arg, uint8_t status, uint32_t transferred, uint32_t remaining);
+typedef void (*usbd_xfer_cb_t)(void *arg, uint8_t status, uint32_t transferred, uint32_t buffered, uint32_t remaining);
 
 /**@}*/
 
