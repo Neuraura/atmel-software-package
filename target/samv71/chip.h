@@ -193,6 +193,8 @@ struct _console_cfg;
 #define ID_GMAC0_Q3     (71) /**< \brief GMAC0 Queue 3 Interrupt (GMAC0_Q3) */
 #define ID_GMAC0_Q4     (72) /**< \brief GMAC0 Queue 4 Interrupt (GMAC0_Q4) */
 #define ID_GMAC0_Q5     (73) /**< \brief GMAC0 Queue 5 Interrupt (GMAC0_Q5) */
+#define ID_DACC0        (100)	// The DACC has 2 DMA channels, but the 2nd channel (id 31) interferes with PWM0 (31)... Breaking this out to a fake ID for DACC0 so we can allocate dma channels
+#define ID_DACC1        (101)	// The DACC has 2 DMA channels, but the 2nd channel (id 31) interferes with PWM0 (31)... Breaking this out to a fake ID for DACC1 so we can allocate dma channels
 
 
 #define ID_PERIPH_COUNT (74) /**< \brief Number of peripheral IDs */

@@ -115,6 +115,8 @@ static const struct peripheral_xdma _xdmac_peripherals[] = {
 	{ ID_UART3,      26,   27 },
 	{ ID_UART4,      28,   29 },
 	{ ID_DACC,       30, 0xff },
+	{ ID_DACC0,      30, 0xff },
+	{ ID_DACC1,      31, 0xff },
 	{ ID_SSC0,       32,   33 },
 	{ ID_PIOA,     0xff,   34 },
 	{ ID_AFEC0,    0xff,   35 },
