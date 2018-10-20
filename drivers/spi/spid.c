@@ -311,6 +311,12 @@ static void _spid_transfer_next_buffer(struct _spi_desc* desc)
  *        Public functions
  *----------------------------------------------------------------------------*/
 
+
+// Runs through an array of buffers in sequence
+// Each buffer has an attribute which is a bitmask of BUS_SPI_BUF_ATTR_RELEASE_CS | BUS_BUF_ATTR_RX | BUS_BUF_ATTR_TX
+// It's possible to mix and match, i.e. BUS_BUF_ATTR_TX for buffers[0] followed by BUS_BUF_ATTR_RX for buffers[1] by specifying the bitmask
+// It's also possible to specify BUS_BUF_ATTR_TX and BUS_BUF_ATTR_RX in the same buffer, which will implement TX followed by read into the same buffer
+
 int spid_transfer(struct _spi_desc* desc,
 		struct _buffer* buffers, int buffer_count,
 		struct _callback* cb)
@@ -382,7 +388,7 @@ int spid_configure(struct _spi_desc* desc)
 }
 
 void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
-		uint32_t bitrate, uint32_t delay_dlybs, uint32_t delay_dlybct,
+		uint32_t bitrate, float delay_dlybs, float delay_dlybct,
 		enum _spid_mode mode)
 {
 	uint32_t csr = SPI_CSR_BITS_8_BIT | SPI_CSR_CSAAT;

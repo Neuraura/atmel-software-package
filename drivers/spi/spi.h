@@ -114,7 +114,7 @@ extern void spi_configure(Spi * spi);
  * \param spi_mode
  */
 extern void spi_configure_cs(Spi * spi, uint8_t cs, uint32_t bitrate,
-			     uint32_t delay_dlybs, uint32_t delay_dlybct,
+			     float delay_dlybs, float delay_dlybct,
 			     uint32_t spi_mode);
 
 /**

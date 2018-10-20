@@ -102,7 +102,7 @@ extern bool spid_is_busy(struct _spi_desc* desc);
 extern void spid_wait_transfer(struct _spi_desc* desc);
 
 extern void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
-		uint32_t bitrate, uint32_t delay_dlybs, uint32_t delay_dlybct,
+		uint32_t bitrate, float delay_dlybs, float delay_dlybct,
 		enum _spid_mode mode);
 
 extern void spid_set_cs_bitrate(struct _spi_desc* desc, uint8_t cs,

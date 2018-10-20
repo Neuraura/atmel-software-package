@@ -78,6 +78,7 @@
 #include "trace.h"
 
 #include <stdint.h>
+#include <math.h>
 
 #include <assert.h>
 
@@ -91,25 +92,30 @@
  *        local functions
  *----------------------------------------------------------------------------*/
 
-static inline uint32_t _spi_compute_scbr(uint32_t bitrate, uint32_t id)
+static uint32_t _spi_compute_scbr(uint32_t bitrate, uint32_t id)
 {
 	uint32_t pclk = pmc_get_peripheral_clock(id);
-	if (bitrate == 0)
-		return 0;
-	return SPI_CSR_SCBR(pclk / (bitrate * 1000));
+	if (bitrate == 0)	return 0;
+	else			bitrate = pclk / bitrate;
+	trace_debug("bitrate: %lu\r\n", bitrate);
+	return SPI_CSR_SCBR(bitrate);
 }
 
-static inline uint32_t _spi_compute_dlybs(uint32_t delay, uint32_t id)
+static inline uint32_t _spi_compute_dlybs(float delay, uint32_t id)
 {
 	uint32_t pclk = pmc_get_peripheral_clock(id);
-	uint32_t dlybs = ((pclk / 1000000u) * delay) / 100;
+	float dlybsf = ceilf(delay * (float)pclk);
+	uint32_t dlybs = (uint32_t)dlybsf;
+	trace_debug("dlybs: %lu\r\n", dlybs);
 	return SPI_CSR_DLYBS(dlybs);
 }
 
-static inline uint32_t _spi_compute_dlybct(uint32_t delay, uint32_t id)
+static inline uint32_t _spi_compute_dlybct(float delay, uint32_t id)
 {
 	uint32_t pclk = pmc_get_peripheral_clock(id);
-	uint32_t dlybct = ((pclk / 32000u) * delay) / 100;
+	float dlybctf = ceilf(delay * (float)pclk / 32.0);
+	uint32_t dlybct = (uint32_t)dlybctf;
+	trace_debug("dlybct: %lu\r\n", dlybct);
 	return SPI_CSR_DLYBCT(dlybct);
 }
 
@@ -168,7 +174,7 @@ void spi_release_cs(Spi * spi)
 }
 
 void spi_configure_cs(Spi * spi, uint8_t cs, uint32_t bitrate,
-		      uint32_t delay_dlybs, uint32_t delay_dlybct,
+		      float delay_dlybs, float delay_dlybct,
 		      uint32_t spi_mode)
 {
 	uint32_t csr = 0;
