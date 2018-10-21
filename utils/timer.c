@@ -157,6 +157,11 @@ uint64_t timer_get_tick(void)
 	return (_timer_get_tick() * 1000) / _timer.channel_freq;
 }
 
+uint32_t timer_get_utick(void)
+{
+	return (_timer_get_tick() * 1000000) / _timer.channel_freq;
+}
+
 void sleep(uint32_t count)
 {
 	timer_sleep(count * 1000);

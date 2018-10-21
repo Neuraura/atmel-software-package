@@ -106,6 +106,11 @@ extern uint64_t timer_get_interval(uint64_t start, uint64_t end);
 extern uint64_t timer_get_tick(void);
 
 /**
+ * \brief Returns the current number of ticks in microseconds
+ */
+extern uint32_t timer_get_utick(void);
+
+/**
  *  \brief Wait for at least count seconds.
  */
 extern void sleep(uint32_t count);
