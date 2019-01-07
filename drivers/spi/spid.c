@@ -142,6 +142,14 @@ static void _spid_transfer_current_buffer_dma(struct _spi_desc* desc)
 		.chunk_size = DMA_CHUNK_SIZE_1,
 	};
 
+	if ( desc->stride == 2 )
+	{
+		rx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;
+		rx_cfg_dma.chunk_size = DMA_CHUNK_SIZE_2;
+		tx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;
+		tx_cfg_dma.chunk_size = DMA_CHUNK_SIZE_2;
+	}
+
 	if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) {
 		cache_clean_region(desc->xfer.current->data, desc->xfer.current->size);
 		tx_cfg.saddr = desc->xfer.current->data;
@@ -174,7 +182,7 @@ static void _spid_transfer_current_buffer_dma(struct _spi_desc* desc)
 
 static void _spid_handler(uint32_t source, void* user_arg)
 {
-	uint8_t data;
+	uint16_t data;
 	uint32_t status = 0;
 	Spi* addr = get_spi_addr_from_id(source);
 	struct _spi_desc *desc = (struct _spi_desc*)user_arg;
@@ -193,13 +201,16 @@ static void _spid_handler(uint32_t source, void* user_arg)
 #endif /* CONFIG_HAVE_SPI_FIFO */
 
 		if (desc->xfer.current->attr & BUS_BUF_ATTR_TX)
-			data = desc->xfer.current->data[desc->xfer.async.tx];
+		{
+			if ( desc->stride == 2 )	data = *((uint16_t *)&desc->xfer.current->data[desc->xfer.async.tx]);
+			else				data = desc->xfer.current->data[desc->xfer.async.tx];
+		}
 		else
-			data = 0xff;
+			data = 0xffff;
 
 		spi_write(desc->addr, data);
 
-		desc->xfer.async.tx++;
+		desc->xfer.async.tx += desc->stride;
 
 		if (desc->xfer.async.tx >= desc->xfer.current->size) {
 			/* current buffer TX complete */
@@ -211,9 +222,12 @@ static void _spid_handler(uint32_t source, void* user_arg)
 		data = spi_read(desc->addr);
 
 		if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)
-			desc->xfer.current->data[desc->xfer.async.rx] = data;
+		{
+			if ( desc->stride == 2 )	*((uint16_t *)&desc->xfer.current->data[desc->xfer.async.rx]) = data;
+			else				desc->xfer.current->data[desc->xfer.async.rx] = data;
+		}
 
-		desc->xfer.async.rx++;
+		desc->xfer.async.rx+=desc->stride;
 
 		if (desc->xfer.async.rx >= desc->xfer.current->size) {
 			/* current buffer RX complete */
@@ -231,22 +245,38 @@ static void _spid_handler(uint32_t source, void* user_arg)
 static void _spid_transfer_current_buffer_polling(struct _spi_desc* desc)
 {
 	int i;
-	uint8_t data;
 
-	for (i = 0; i < desc->xfer.current->size; ++i) {
-#ifdef CONFIG_HAVE_SPI_FIFO
-		_spid_wait_tx_fifo_not_full(desc);
-#endif /* CONFIG_HAVE_SPI_FIFO */
+	uint16_t data;
 
-		if (desc->xfer.current->attr & BUS_BUF_ATTR_TX)
-			data = desc->xfer.current->data[i];
-		else
-			data = 0xff;
+	if ( desc->stride <= 1 )
+	{
+		for (i = 0; i < desc->xfer.current->size; ++i) {
+			#ifdef CONFIG_HAVE_SPI_FIFO
+				_spid_wait_tx_fifo_not_full(desc);
+			#endif /* CONFIG_HAVE_SPI_FIFO */
 
-		data = spi_transfer(desc->addr, data);
+			if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) data = desc->xfer.current->data[i];
+			else						data = 0xff;
 
-		if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)
-			desc->xfer.current->data[i] = data;
+			data = spi_transfer(desc->addr, data);
+
+			if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)	desc->xfer.current->data[i] = data;
+		}
+	}
+	else
+	{
+		for (i = 0; i < desc->xfer.current->size; i+=desc->stride) {
+			#ifdef CONFIG_HAVE_SPI_FIFO
+				_spid_wait_tx_fifo_not_full(desc);
+			#endif /* CONFIG_HAVE_SPI_FIFO */
+
+			if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) data = *((uint16_t *)&desc->xfer.current->data[i]);
+			else						data = 0xffff;
+
+			data = spi_transfer(desc->addr, data);
+
+			if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)	*((uint16_t *)&desc->xfer.current->data[i]) = data;
+		}
 	}
 
 	_spid_transfer_next_buffer(desc);
@@ -389,9 +419,13 @@ int spid_configure(struct _spi_desc* desc)
 
 void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
 		uint32_t bitrate, float delay_dlybs, float delay_dlybct,
-		enum _spid_mode mode)
+		enum _spid_mode mode, uint8_t bits)
 {
-	uint32_t csr = SPI_CSR_BITS_8_BIT | SPI_CSR_CSAAT;
+	if ( bits > 16 || bits < 8 )	trace_error("spid_configure_cs: bits must be 8..16\r\n");
+
+	desc->stride = (bits == 8) ? 1 : 2;
+
+	uint32_t csr = SPI_CSR_BITS(bits - 8) | SPI_CSR_CSAAT;
 
 	switch (mode) {
 	case SPID_MODE_0:
@@ -409,6 +443,18 @@ void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
 	}
 
 	spi_configure_cs(desc->addr, cs, bitrate, delay_dlybs, delay_dlybct, csr);
+}
+
+void spid_change_bits_cs(struct _spi_desc* desc, uint8_t cs, uint8_t bits)
+{
+	if ( bits > 16 || bits < 8 )	trace_error("spid_change_bits_cs: bits must be 8..16\r\n");
+
+	desc->stride = (bits == 8) ? 1 : 2;
+
+	uint32_t csr = desc->addr->SPI_CSR[cs];
+	csr &= ~SPI_CSR_BITS_Msk;
+	csr |= SPI_CSR_BITS(bits-8);
+	desc->addr->SPI_CSR[cs] = csr;
 }
 
 void spid_set_cs_bitrate(struct _spi_desc* desc, uint8_t cs, uint32_t bitrate)
