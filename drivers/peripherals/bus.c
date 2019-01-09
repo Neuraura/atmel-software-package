@@ -348,7 +348,7 @@ int bus_configure_slave(uint8_t bus_id, const struct _bus_dev_cfg* cfg)
 		                  cfg->spi_dev.bitrate,
 		                  cfg->spi_dev.delay.bs,
 		                  cfg->spi_dev.delay.bct,
-		                  cfg->spi_dev.spi_mode, 8);
+		                  cfg->spi_dev.spi_mode);
 		break;
 #endif
 #ifdef CONFIG_HAVE_I2C_BUS

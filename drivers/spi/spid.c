@@ -143,49 +143,15 @@ static void _spid_transfer_current_buffer_dma(struct _spi_desc* desc)
 	};
 
 	if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) {
-		if ( desc->stride == 4 )
-		{
-			// Variable select mode, we use 32bits at a time for sending made up of lastxfer + chip_select + 16bit of data
-			// Cache clean region is done in samples.c, to save a few cycles
-			// cache_clean_region(desc->variable_peripheral_tx, desc->xfer.current->size * 2);
-			tx_cfg.saddr = desc->variable_peripheral_tx;
-			tx_cfg_dma.incr_saddr = true;
-		}
-		else
-		{
-			cache_clean_region(desc->xfer.current->data, desc->xfer.current->size);
-			tx_cfg.saddr = desc->xfer.current->data;
-			tx_cfg_dma.incr_saddr = true;
-		}
+		cache_clean_region(desc->xfer.current->data, desc->xfer.current->size);
+		tx_cfg.saddr = desc->xfer.current->data;
+		tx_cfg_dma.incr_saddr = true;
 	}
 
 	if (desc->xfer.current->attr & BUS_BUF_ATTR_RX) {
 		rx_cfg.daddr = desc->xfer.current->data;
 		rx_cfg_dma.incr_daddr = true;
 	}
-
-	if ( desc->stride ==  2 || desc->stride == 4)
-	{
-		// 16 bit (stride 2) mode requires a dma width of 16bits
-		rx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;	// 16 bits at a time
-		rx_cfg.len /= 2;					// Length is the number of groups of 16 bits
-	}
-	
-	if ( desc->stride == 2 )
-	{
-		// 16 bit (stride 2) mode requires a dma width of 16bits
-		tx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;	// 16 bits at a time
-		tx_cfg.len /= 2;					// Length is the number of groups of 16 bits
-	}
-	else if ( desc->stride == 4 )
-	{
-		// Variable Peripheral Select - 32 bit (stride 4) mode requires a dma width of 32bits
-		tx_cfg_dma.data_width = DMA_DATA_WIDTH_WORD;		// 32 bits at a time
-		tx_cfg.len /= 2;					// Length is the number of groups of 32 bits
-	}
-
-	//trace_debug("tx_cfg.len: %lu\r\n", tx_cfg.len);
-	//trace_debug("rx_cfg.len: %lu\r\n", rx_cfg.len);
 
 	if (!desc->xfer.dma.tx_channel)
 		desc->xfer.dma.tx_channel = dma_allocate_channel(DMA_PERIPH_MEMORY, id);
@@ -208,7 +174,7 @@ static void _spid_transfer_current_buffer_dma(struct _spi_desc* desc)
 
 static void _spid_handler(uint32_t source, void* user_arg)
 {
-	uint16_t data;
+	uint8_t data;
 	uint32_t status = 0;
 	Spi* addr = get_spi_addr_from_id(source);
 	struct _spi_desc *desc = (struct _spi_desc*)user_arg;
@@ -227,16 +193,13 @@ static void _spid_handler(uint32_t source, void* user_arg)
 #endif /* CONFIG_HAVE_SPI_FIFO */
 
 		if (desc->xfer.current->attr & BUS_BUF_ATTR_TX)
-		{
-			if ( desc->stride == 2 )	data = *((uint16_t *)&desc->xfer.current->data[desc->xfer.async.tx]);
-			else				data = desc->xfer.current->data[desc->xfer.async.tx];
-		}
+			data = desc->xfer.current->data[desc->xfer.async.tx];
 		else
-			data = 0xffff;
+			data = 0xff;
 
 		spi_write(desc->addr, data);
 
-		desc->xfer.async.tx += desc->stride;
+		desc->xfer.async.tx++;
 
 		if (desc->xfer.async.tx >= desc->xfer.current->size) {
 			/* current buffer TX complete */
@@ -248,12 +211,9 @@ static void _spid_handler(uint32_t source, void* user_arg)
 		data = spi_read(desc->addr);
 
 		if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)
-		{
-			if ( desc->stride == 2 )	*((uint16_t *)&desc->xfer.current->data[desc->xfer.async.rx]) = data;
-			else				desc->xfer.current->data[desc->xfer.async.rx] = data;
-		}
+			desc->xfer.current->data[desc->xfer.async.rx] = data;
 
-		desc->xfer.async.rx+=desc->stride;
+		desc->xfer.async.rx++;
 
 		if (desc->xfer.async.rx >= desc->xfer.current->size) {
 			/* current buffer RX complete */
@@ -271,56 +231,22 @@ static void _spid_handler(uint32_t source, void* user_arg)
 static void _spid_transfer_current_buffer_polling(struct _spi_desc* desc)
 {
 	int i;
+	uint8_t data;
 
-	uint16_t data;
+	for (i = 0; i < desc->xfer.current->size; ++i) {
+#ifdef CONFIG_HAVE_SPI_FIFO
+		_spid_wait_tx_fifo_not_full(desc);
+#endif /* CONFIG_HAVE_SPI_FIFO */
 
-	if ( desc->stride == 4 )
-	{
-		uint32_t data2;
+		if (desc->xfer.current->attr & BUS_BUF_ATTR_TX)
+			data = desc->xfer.current->data[i];
+		else
+			data = 0xff;
 
-		for (i = 0; i < desc->xfer.current->size; i += 2) {
-			#ifdef CONFIG_HAVE_SPI_FIFO
-				_spid_wait_tx_fifo_not_full(desc);
-			#endif /* CONFIG_HAVE_SPI_FIFO */
+		data = spi_transfer(desc->addr, data);
 
-			data2 = *((uint32_t *)&desc->variable_peripheral_tx[i*2]);
-		
-			//trace_debug("%d: 0x%08lX\r\n", i, data2);
-
-			data = spi_transfer_variable_slave(desc->addr, data2);
-
-			if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)	*((uint16_t *)&desc->xfer.current->data[i]) = data;
-		}
-	}
-	else if ( desc->stride <= 1 )
-	{
-		for (i = 0; i < desc->xfer.current->size; ++i) {
-			#ifdef CONFIG_HAVE_SPI_FIFO
-				_spid_wait_tx_fifo_not_full(desc);
-			#endif /* CONFIG_HAVE_SPI_FIFO */
-
-			if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) data = desc->xfer.current->data[i];
-			else						data = 0xff;
-
-			data = spi_transfer(desc->addr, data);
-
-			if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)	desc->xfer.current->data[i] = data;
-		}
-	}
-	else
-	{
-		for (i = 0; i < desc->xfer.current->size; i+=desc->stride) {
-			#ifdef CONFIG_HAVE_SPI_FIFO
-				_spid_wait_tx_fifo_not_full(desc);
-			#endif /* CONFIG_HAVE_SPI_FIFO */
-
-			if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) data = *((uint16_t *)&desc->xfer.current->data[i]);
-			else						data = 0xffff;
-
-			data = spi_transfer(desc->addr, data);
-
-			if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)	*((uint16_t *)&desc->xfer.current->data[i]) = data;
-		}
+		if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)
+			desc->xfer.current->data[i] = data;
 	}
 
 	_spid_transfer_next_buffer(desc);
@@ -410,7 +336,7 @@ int spid_transfer(struct _spi_desc* desc,
 		return -EBUSY;
 	}
 
-	if ( desc->stride != 4 )	spi_select_cs(desc->addr, desc->chip_select);
+	spi_select_cs(desc->addr, desc->chip_select);
 
 	desc->xfer.current = buffers;
 	desc->xfer.last = &buffers[buffer_count - 1];
@@ -463,13 +389,9 @@ int spid_configure(struct _spi_desc* desc)
 
 void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
 		uint32_t bitrate, float delay_dlybs, float delay_dlybct,
-		enum _spid_mode mode, uint8_t bits)
+		enum _spid_mode mode)
 {
-	if ( bits > 16 || bits < 8 )	trace_error("spid_configure_cs: bits must be 8..16\r\n");
-
-	desc->stride = (bits == 8) ? 1 : 2;
-
-	uint32_t csr = SPI_CSR_BITS(bits - 8) | SPI_CSR_CSAAT;
+	uint32_t csr = SPI_CSR_BITS_8_BIT | SPI_CSR_CSAAT;
 
 	switch (mode) {
 	case SPID_MODE_0:
@@ -489,18 +411,6 @@ void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
 	spi_configure_cs(desc->addr, cs, bitrate, delay_dlybs, delay_dlybct, csr);
 }
 
-void spid_change_bits_cs(struct _spi_desc* desc, uint8_t cs, uint8_t bits)
-{
-	if ( bits > 16 || bits < 8 )	trace_error("spid_change_bits_cs: bits must be 8..16\r\n");
-
-	desc->stride = (bits == 8) ? 1 : 2;
-
-	uint32_t csr = desc->addr->SPI_CSR[cs];
-	csr &= ~SPI_CSR_BITS_Msk;
-	csr |= SPI_CSR_BITS(bits-8);
-	desc->addr->SPI_CSR[cs] = csr;
-}
-
 void spid_set_cs_bitrate(struct _spi_desc* desc, uint8_t cs, uint32_t bitrate)
 {
 	spi_set_cs_bitrate(desc->addr, cs, bitrate);
@@ -513,17 +423,4 @@ int spid_configure_master(struct _spi_desc* desc, bool master)
 	spi_enable(desc->addr);
 
 	return 0;
-}
-
-void spid_fixed_peripheral_select(struct _spi_desc* desc)
-{
-	uint32_t mr = desc->addr->SPI_MR;
-	mr &= ~SPI_MR_PS;
-	desc->addr->SPI_MR = mr;
-}
-
-void spid_variable_peripheral_select(struct _spi_desc* desc)
-{
-	desc->addr->SPI_MR |= SPI_MR_PS;
-	desc->stride = 4;
 }

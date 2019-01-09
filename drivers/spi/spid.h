@@ -57,8 +57,6 @@ struct _spi_desc {
 	Spi* addr;
 	uint8_t chip_select;
 	int transfer_mode;
-	uint8_t stride;			// 0 or 1 = 8 bit data, 2 = 9..16 bit data, 4 = variable peripheral select
-	uint8_t *variable_peripheral_tx;	// Only for variable select reception, we use this to save having to recreate the buffer each time
 	/* following fields are used internally */
 	mutex_t mutex;
 
@@ -105,19 +103,12 @@ extern void spid_wait_transfer(struct _spi_desc* desc);
 
 extern void spid_configure_cs(struct _spi_desc* desc, uint8_t cs,
 		uint32_t bitrate, float delay_dlybs, float delay_dlybct,
-		enum _spid_mode mode, uint8_t bits);
-
-extern void spid_change_bits_cs(struct _spi_desc* desc, uint8_t cs, uint8_t bits);
+		enum _spid_mode mode);
 
 extern void spid_set_cs_bitrate(struct _spi_desc* desc, uint8_t cs,
 		uint32_t bitrate);
 
 extern int spid_configure_master(struct _spi_desc* desc, bool master);
-
-extern void spid_fixed_peripheral_select(struct _spi_desc* desc);
-
-extern void spid_variable_peripheral_select(struct _spi_desc* desc);
-
 
 
 #endif /* SPID_HEADER__ */
