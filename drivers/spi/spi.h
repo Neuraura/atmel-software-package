@@ -178,6 +178,16 @@ extern uint16_t spi_read(Spi *spi);
 extern uint16_t spi_transfer(Spi *spi, uint16_t tx);
 
 /**
+ * \brief Write and Read one data from SPI peripherla.
+ *
+ * \param spi Pointer to an Spi instance.
+ * \param tx  Data to write in variable peripheral select format
+ *
+ * \return read data.
+ */
+extern uint16_t spi_transfer_variable_slave(Spi *spi, uint32_t tx);
+
+/**
  * \brief Get the current status register of the given SPI peripheral.
  *
  * \note This resets the internal value of the status register, so further

@@ -142,24 +142,50 @@ static void _spid_transfer_current_buffer_dma(struct _spi_desc* desc)
 		.chunk_size = DMA_CHUNK_SIZE_1,
 	};
 
-	if ( desc->stride == 2 )
-	{
-		rx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;
-		rx_cfg_dma.chunk_size = DMA_CHUNK_SIZE_2;
-		tx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;
-		tx_cfg_dma.chunk_size = DMA_CHUNK_SIZE_2;
-	}
-
 	if (desc->xfer.current->attr & BUS_BUF_ATTR_TX) {
-		cache_clean_region(desc->xfer.current->data, desc->xfer.current->size);
-		tx_cfg.saddr = desc->xfer.current->data;
-		tx_cfg_dma.incr_saddr = true;
+		if ( desc->stride == 4 )
+		{
+			// Variable select mode, we use 32bits at a time for sending made up of lastxfer + chip_select + 16bit of data
+			// Cache clean region is done in samples.c, to save a few cycles
+			// cache_clean_region(desc->variable_peripheral_tx, desc->xfer.current->size * 2);
+			tx_cfg.saddr = desc->variable_peripheral_tx;
+			tx_cfg_dma.incr_saddr = true;
+		}
+		else
+		{
+			cache_clean_region(desc->xfer.current->data, desc->xfer.current->size);
+			tx_cfg.saddr = desc->xfer.current->data;
+			tx_cfg_dma.incr_saddr = true;
+		}
 	}
 
 	if (desc->xfer.current->attr & BUS_BUF_ATTR_RX) {
 		rx_cfg.daddr = desc->xfer.current->data;
 		rx_cfg_dma.incr_daddr = true;
 	}
+
+	if ( desc->stride ==  2 || desc->stride == 4)
+	{
+		// 16 bit (stride 2) mode requires a dma width of 16bits
+		rx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;	// 16 bits at a time
+		rx_cfg.len /= 2;					// Length is the number of groups of 16 bits
+	}
+	
+	if ( desc->stride == 2 )
+	{
+		// 16 bit (stride 2) mode requires a dma width of 16bits
+		tx_cfg_dma.data_width = DMA_DATA_WIDTH_HALF_WORD;	// 16 bits at a time
+		tx_cfg.len /= 2;					// Length is the number of groups of 16 bits
+	}
+	else if ( desc->stride == 4 )
+	{
+		// Variable Peripheral Select - 32 bit (stride 4) mode requires a dma width of 32bits
+		tx_cfg_dma.data_width = DMA_DATA_WIDTH_WORD;		// 32 bits at a time
+		tx_cfg.len /= 2;					// Length is the number of groups of 32 bits
+	}
+
+	//trace_debug("tx_cfg.len: %lu\r\n", tx_cfg.len);
+	//trace_debug("rx_cfg.len: %lu\r\n", rx_cfg.len);
 
 	if (!desc->xfer.dma.tx_channel)
 		desc->xfer.dma.tx_channel = dma_allocate_channel(DMA_PERIPH_MEMORY, id);
@@ -248,7 +274,25 @@ static void _spid_transfer_current_buffer_polling(struct _spi_desc* desc)
 
 	uint16_t data;
 
-	if ( desc->stride <= 1 )
+	if ( desc->stride == 4 )
+	{
+		uint32_t data2;
+
+		for (i = 0; i < desc->xfer.current->size; i += 2) {
+			#ifdef CONFIG_HAVE_SPI_FIFO
+				_spid_wait_tx_fifo_not_full(desc);
+			#endif /* CONFIG_HAVE_SPI_FIFO */
+
+			data2 = *((uint32_t *)&desc->variable_peripheral_tx[i*2]);
+		
+			//trace_debug("%d: 0x%08lX\r\n", i, data2);
+
+			data = spi_transfer_variable_slave(desc->addr, data2);
+
+			if (desc->xfer.current->attr & BUS_BUF_ATTR_RX)	*((uint16_t *)&desc->xfer.current->data[i]) = data;
+		}
+	}
+	else if ( desc->stride <= 1 )
 	{
 		for (i = 0; i < desc->xfer.current->size; ++i) {
 			#ifdef CONFIG_HAVE_SPI_FIFO
@@ -366,7 +410,7 @@ int spid_transfer(struct _spi_desc* desc,
 		return -EBUSY;
 	}
 
-	spi_select_cs(desc->addr, desc->chip_select);
+	if ( desc->stride != 4 )	spi_select_cs(desc->addr, desc->chip_select);
 
 	desc->xfer.current = buffers;
 	desc->xfer.last = &buffers[buffer_count - 1];
@@ -469,4 +513,17 @@ int spid_configure_master(struct _spi_desc* desc, bool master)
 	spi_enable(desc->addr);
 
 	return 0;
+}
+
+void spid_fixed_peripheral_select(struct _spi_desc* desc)
+{
+	uint32_t mr = desc->addr->SPI_MR;
+	mr &= ~SPI_MR_PS;
+	desc->addr->SPI_MR = mr;
+}
+
+void spid_variable_peripheral_select(struct _spi_desc* desc)
+{
+	desc->addr->SPI_MR |= SPI_MR_PS;
+	desc->stride = 4;
 }

@@ -225,7 +225,7 @@ void spi_write(Spi *spi, uint16_t tx)
 
 uint16_t spi_read(Spi *spi)
 {
-	while ((spi->SPI_SR & SPI_SR_RDRF) == 0);
+	while ((spi->SPI_SR & SPI_SR_RDRF) == 0); 
 
 	return (spi->SPI_RDR & SPI_RDR_RD_Msk);
 }
@@ -235,6 +235,17 @@ uint16_t spi_transfer(Spi *spi, uint16_t tx)
 	spi_write(spi, tx);
 
 	return spi_read(spi);
+}
+
+uint16_t spi_transfer_variable_slave(Spi *spi, uint32_t tx)
+{
+	// Transmit the variable peripheral format 32bits
+	while ((spi->SPI_SR & SPI_SR_TDRE) == 0);
+	writew(&spi->SPI_TDR, tx);
+
+	// Read 16 bits back
+	while ((spi->SPI_SR & SPI_SR_RDRF) == 0); 
+	return (spi->SPI_RDR & SPI_RDR_RD_Msk);
 }
 
 bool spi_is_tx_finished(Spi * spi)
