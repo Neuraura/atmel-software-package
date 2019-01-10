@@ -32,6 +32,7 @@
  *----------------------------------------------------------------------------*/
 
 #include "chip.h"
+#include "trace.h"
 
 #if defined(CONFIG_HAVE_AIC2) || defined(CONFIG_HAVE_AIC5)
 #include "irq/aic.h"
@@ -183,6 +184,7 @@ void irq_add_handler(uint32_t source, irq_handler_t handler, void* user_arg)
 	entry->handler = handler;
 	entry->user_arg = user_arg;
 	entry->next = handlers[source];
+	trace_debug("irq_add_handler: 0x%08lX\r\n", source);
 	handlers[source] = entry;
 }
 
@@ -207,6 +209,7 @@ void irq_remove_handler(uint32_t source, irq_handler_t handler)
 
 void irq_enable(uint32_t source)
 {
+	trace_debug("irq_enable: 0x%08lX\r\n", source);
 #if defined(CONFIG_HAVE_AIC2) || defined(CONFIG_HAVE_AIC5)
 	aic_enable(source);
 #elif defined(CONFIG_HAVE_NVIC)
@@ -218,6 +221,7 @@ void irq_enable(uint32_t source)
 
 void irq_disable(uint32_t source)
 {
+	trace_debug("irq_disable: 0x%08lX\r\n", source);
 #if defined(CONFIG_HAVE_AIC2) || defined(CONFIG_HAVE_AIC5)
 	aic_disable(source);
 #elif defined(CONFIG_HAVE_NVIC)
